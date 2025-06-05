@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智能对话助手</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background-color: #10a37f;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      font-size: 1.75rem;
+      font-weight: bold;
+    }
+    .config {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      padding: 0.5rem 1rem;
+      background: #fff;
+      border-bottom: 1px solid #eee;
+    }
+    .config > div {
+      display: flex;
+      flex-direction: column;
+      min-width: 220px;
+    }
+    .config label {
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    .config input,
+    .config select,
+    .config button {
+      padding: 6px;
+      font-size: 0.95rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .message {
+      max-width: 80%;
+      margin: 0.25rem 0;
+      padding: 0.5rem 0.75rem;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      position: relative;
+      line-height: 1.5;
+      font-size: 1rem;
+      user-select: text;
+    }
+    .user {
+      background-color: #d1ecf1;
+      align-self: flex-end;
+    }
+    .assistant {
+      background-color: #f8f9fa;
+      align-self: flex-start;
+    }
+    .input-area {
+      display: flex;
+      padding: 1rem;
+      background: white;
+      border-top: 1px solid #ddd;
+    }
+    textarea {
+      flex: 1;
+      resize: none;
+      padding: 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button.send {
+      margin-left: 1rem;
+      padding: 0.75rem 1.25rem;
+      font-size: 1rem;
+      background-color: #10a37f;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .thinking {
+      font-size: 0.8rem;
+      color: #aaa;
+      font-style: italic;
+      margin-top: 0.25rem;
+    }
+    .copied-msg {
+      font-size: 0.75rem;
+      color: #666;
+      position: absolute;
+      bottom: 2px;
+      right: 6px;
+      opacity: 0;
+      animation: fadeInOut 1s ease-in-out;
+    }
+    @keyframes fadeInOut {
+      0% { opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>智能对话助手</header>
+
+  <div class="config">
+    <div>
+      <label for="apiUrl">API 端点：</label>
+      <input type="text" id="apiUrl" value="https://ai.4444567.xyz/v1" />
+    </div>
+    <div>
+      <label for="apiKey">密钥：</label>
+      <input type="password" id="apiKey" placeholder="请输入 API 密钥" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="fetchModels()">拉取模型</button>
+    </div>
+    <div>
+      <label for="modelInput">选择模型：</label>
+      <select id="modelInput">
+        <option value="">请选择模型</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="chat-container" id="chatContainer"></div>
+
+  <div class="input-area">
+    <textarea id="userInput" rows="2" placeholder="输入你的问题，Shift+Enter换行"></textarea>
+    <button class="send" onclick="sendMessage()">发送</button>
+  </div>
+
+  <script>
+    let conversation = [];
+
+    async function fetchModels() {
+      const apiUrl = document.getElementById('apiUrl').value;
+      const apiKey = document.getElementById('apiKey').value;
+      const modelSelect = document.getElementById('modelInput');
+      try {
+        const res = await fetch(apiUrl + '/models', {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        const data = await res.json();
+        modelSelect.innerHTML = '<option value="">请选择模型</option>';
+        data.data.forEach((m) => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.id;
+          modelSelect.appendChild(opt);
+        });
+      } catch (e) {
+        alert('拉取模型失败');
+        console.error(e);
+      }
+    }
+
+    function appendMessage(role, content) {
+      const chat = document.getElementById('chatContainer');
+      const msg = document.createElement('div');
+      msg.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
+
+      // 匹配特定的 "生成的图像" 链接
+      const generatedImageRegex = /!\[生成的图像\]\((https?:\/\/[^\s)]+)\)/gi;
+
+      // 将内容中的 "生成的图像" 替换为 `<img>` 标签
+      let htmlContent = content.replace(generatedImageRegex, (_, url) => {
+        return `<img src="${url}" style="max-width:100%; margin-top:0.5rem; border-radius:8px;" alt="生成的图像" />`;
+      });
+
+      msg.innerHTML = htmlContent;
+
+      msg.onmousedown = () => {
+        let timer = setTimeout(() => {
+          navigator.clipboard.writeText(content);
+          showCopiedTip(msg);
+        }, 800);
+        msg.onmouseup = () => clearTimeout(timer);
+        msg.onmouseleave = () => clearTimeout(timer);
+      };
+
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function showCopiedTip(el) {
+      const tip = document.createElement('div');
+      tip.textContent = '已复制';
+      tip.className = 'copied-msg';
+      el.appendChild(tip);
+      setTimeout(() => tip.remove(), 1000);
+    }
+
+    function showThinking() {
+      const chat = document.getElementById('chatContainer');
+      const tip = document.createElement('div');
+      tip.className = 'thinking';
+      tip.textContent = '思考中...';
+      tip.id = 'thinkingTip';
+      chat.appendChild(tip);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function removeThinking() {
+      const tip = document.getElementById('thinkingTip');
+      if (tip) tip.remove();
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const apiUrl = document.getElementById('apiUrl').value;
+      const apiKey = document.getElementById('apiKey').value;
+      const model = document.getElementById('modelInput').value;
+
+      appendMessage('user', text);
+      conversation.push({ role: 'user', content: text });
+      input.value = '';
+
+      showThinking();
+
+      try {
+        const res = await fetch(apiUrl + '/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: conversation,
+            temperature: 0.7,
+          }),
+        });
+        const data = await res.json();
+        removeThinking();
+        const reply = data.choices[0].message.content;
+        appendMessage('assistant', reply);
+        conversation.push({ role: 'assistant', content: reply });
+      } catch (err) {
+        removeThinking();
+        console.error(err);
+        appendMessage('assistant', '出错了，请检查 API 设置');
+      }
+    }
+
+    document.getElementById('userInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>

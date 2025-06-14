@@ -4,6 +4,43 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>智能对话助手</title>
+
+  <!-- Highlight.js dark theme -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css" />
+  <!-- Highlight.js core -->
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+
+  <!-- marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- MathJax for LaTeX rendering -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      },
+      svg: {
+        fontCache: 'global'
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+  <!-- marked 高亮设置 -->
+  <script>
+    marked.setOptions({
+      highlight: function(code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+          return hljs.highlight(code, { language: lang }).value;
+        } else {
+          return hljs.highlightAuto(code).value;
+        }
+      },
+      langPrefix: 'hljs language-',
+      breaks: true
+    });
+  </script>
+
   <style>
     body {
       margin: 0;
@@ -121,9 +158,6 @@
       100% { opacity: 0; }
     }
   </style>
-
-  <!-- ✅ 引入 marked.js 用于 Markdown 渲染 -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
   <header>智能对话助手</header>
@@ -131,7 +165,7 @@
   <div class="config">
     <div>
       <label for="apiUrl">API 端点：</label>
-      <input type="text" id="apiUrl" value="https://" />
+      <input type="text" id="apiUrl" value="https://ai.4444567.xyz/v1" />
     </div>
     <div>
       <label for="apiKey">密钥：</label>
@@ -186,15 +220,21 @@
       const msg = document.createElement('div');
       msg.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
 
-      // 匹配生成的图像链接
       const generatedImageRegex = /!\[生成的图像\]\((https?:\/\/[^\s)]+)\)/gi;
 
-      // ✅ 使用 marked 渲染 Markdown + 图像替换
       let htmlContent = marked.parse(content).replace(generatedImageRegex, (_, url) => {
         return `<img src="${url}" style="max-width:100%; margin-top:0.5rem; border-radius:8px;" alt="生成的图像" />`;
       });
 
       msg.innerHTML = htmlContent;
+
+      msg.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+      });
+
+      if (window.MathJax && MathJax.typesetPromise) {
+        MathJax.typesetPromise([msg]);
+      }
 
       msg.onmousedown = () => {
         let timer = setTimeout(() => {

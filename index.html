@@ -222,10 +222,22 @@
       const apiUrl = document.getElementById('apiUrl').value;
       const apiKey = document.getElementById('apiKey').value;
       const modelSelect = document.getElementById('modelInput');
+      
+      if (!apiUrl || !apiKey) {
+        alert('请确保填写了API端点和密钥');
+        return;
+      }
+      
       try {
         const res = await fetch(apiUrl + '/models', {
           headers: { Authorization: `Bearer ${apiKey}` },
         });
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(`API响应错误 (${res.status}): ${errorData.error?.message || res.statusText}`);
+        }
+        
         const data = await res.json();
         modelSelect.innerHTML = '<option value="">请选择模型</option>';
         data.data.forEach((m) => {
@@ -234,9 +246,11 @@
           opt.textContent = m.id;
           modelSelect.appendChild(opt);
         });
+        
+        alert('模型拉取成功！');
       } catch (e) {
-        alert('拉取模型失败');
-        console.error(e);
+        alert('拉取模型失败: ' + e.message);
+        console.error('拉取模型错误:', e);
       }
     }
 
@@ -302,6 +316,12 @@
       const apiKey = document.getElementById('apiKey').value;
       const model = document.getElementById('modelInput').value;
 
+      // 检查必要参数
+      if (!apiUrl || !apiKey || !model) {
+        alert('请确保填写了API端点、密钥并选择了模型');
+        return;
+      }
+
       appendMessage('user', text);
       conversation.push({ role: 'user', content: text });
       input.value = '';
@@ -309,27 +329,39 @@
       showThinking();
 
       try {
-        const res = await fetch(apiUrl + '/chat/completions', {
+        const response = await fetch(`${apiUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify({
-            model,
+            model: model,
             messages: conversation,
-            temperature: 0.7,
-          }),
+            temperature: 0.7
+          })
         });
-        const data = await res.json();
-        removeThinking();
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`API响应错误 (${response.status}): ${errorData.error?.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          throw new Error('API返回的数据格式不正确');
+        }
+        
         const reply = data.choices[0].message.content;
         appendMessage('assistant', reply);
         conversation.push({ role: 'assistant', content: reply });
       } catch (err) {
         removeThinking();
-        console.error(err);
-        appendMessage('assistant', '出错了，请检查 API 设置');
+        console.error('API请求错误:', err);
+        appendMessage('assistant', `请求出错: ${err.message || '未知错误'}`);
+      } finally {
+        removeThinking();
       }
     }
 
